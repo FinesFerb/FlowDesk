@@ -1,0 +1,16 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@Color">
+    @Priority.ToRussian()
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public RequestPriority Priority { get; set; }
+
+    private Color Color => Priority switch
+    {
+        RequestPriority.Critical => Color.Error,
+        RequestPriority.High => Color.Warning,
+        RequestPriority.Normal => Color.Info,
+        _ => Color.Default
+    };
+}

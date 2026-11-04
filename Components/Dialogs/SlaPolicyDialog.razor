@@ -1,0 +1,91 @@
+@using MudBlazor
+@inject IAdminService AdminService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(Policy is null ? "Новая SLA-политика" : "Редактирование SLA-политики")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSelect T="int" @bind-Value="_model.CategoryId" Label="Категория" Variant="Variant.Outlined" Class="mb-4">
+            @foreach (var category in Categories)
+            {
+                <MudSelectItem T="int" Value="@category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="RequestPriority" @bind-Value="_model.Priority" Label="Приоритет" Variant="Variant.Outlined" Class="mb-4">
+            @foreach (var priority in Enum.GetValues<RequestPriority>())
+            {
+                <MudSelectItem T="RequestPriority" Value="@priority">@priority.ToRussian()</MudSelectItem>
+            }
+        </MudSelect>
+        <MudNumericField @bind-Value="_model.Hours" Label="Срок, ч" Variant="Variant.Outlined" Min="1" Max="720" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Отмена</MudButton>
+        <MudButton OnClick="SaveAsync" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public SlaPolicyDto? Policy { get; set; }
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<CategoryDto> Categories { get; set; } = [];
+
+    private readonly SaveSlaPolicyDto _model = new();
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Policy is not null)
+        {
+            _model.CategoryId = Policy.CategoryId;
+            _model.Priority = Policy.Priority;
+            _model.Hours = Policy.Hours;
+        }
+        else if (Categories.Count > 0)
+        {
+            _model.CategoryId = Categories[0].Id;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_model.CategoryId == 0)
+        {
+            Snackbar.Add("Выберите категорию.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (Policy is null)
+            {
+                await AdminService.CreateSlaPolicyAsync(_model);
+            }
+            else
+            {
+                await AdminService.UpdateSlaPolicyAsync(Policy.Id, _model);
+            }
+
+            Snackbar.Add("SLA-политика сохранена.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

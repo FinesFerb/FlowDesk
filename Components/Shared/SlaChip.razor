@@ -1,0 +1,26 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@Color" Icon="@Icon">
+    @SlaState
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public string SlaState { get; set; } = string.Empty;
+
+    private Color Color => SlaState switch
+    {
+        SlaStates.Overdue => Color.Error,
+        SlaStates.AtRisk => Color.Warning,
+        SlaStates.OnTrack => Color.Success,
+        SlaStates.Completed => Color.Default,
+        _ => Color.Default
+    };
+
+    private string Icon => SlaState switch
+    {
+        SlaStates.Overdue => Icons.Material.Filled.Error,
+        SlaStates.AtRisk => Icons.Material.Filled.Warning,
+        SlaStates.OnTrack => Icons.Material.Filled.CheckCircle,
+        SlaStates.Completed => Icons.Material.Filled.DoneAll,
+        _ => Icons.Material.Filled.RemoveCircleOutline
+    };
+}

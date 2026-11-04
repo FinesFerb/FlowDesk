@@ -1,0 +1,226 @@
+@page "/dispatcher"
+@attribute [Authorize(Roles = RoleNames.Dispatcher + "," + RoleNames.Admin)]
+@using System.Security.Claims
+@using FlowDesk.Web.Components.Dialogs
+@using FlowDesk.Web.Data
+@inject IRequestService RequestService
+@inject IAdminService AdminService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Все заявки — FlowDesk</PageTitle>
+
+<div class="d-flex justify-space-between align-center flex-wrap gap-3 mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1">Очередь заявок</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Фильтруйте обращения, контролируйте SLA и назначайте исполнителей.
+        </MudText>
+    </div>
+    <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh">
+        Обновить
+    </MudButton>
+</div>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+    <MudGrid Spacing="3" Class="align-center">
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_filter.Search"
+                          Label="Поиск"
+                          Placeholder="Тема, описание, клиент"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="ApplyFiltersAsync" />
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="int?"
+                       @bind-Value="_filter.StatusId"
+                       Label="Статус"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var status in _statuses)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)status.Id)">@status.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="int?"
+                       @bind-Value="_filter.CategoryId"
+                       Label="Категория"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var category in _categories)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)category.Id)">@category.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="RequestPriority?"
+                       @bind-Value="_filter.Priority"
+                       Label="Приоритет"
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+                @foreach (var priority in Enum.GetValues<RequestPriority>())
+                {
+                    <MudSelectItem T="RequestPriority?" Value="@((RequestPriority?)priority)">@priority.ToRussian()</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="3" Class="d-flex gap-2">
+            <MudButton OnClick="ApplyFiltersAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAlt">
+                Применить
+            </MudButton>
+            <MudButton OnClick="ClearFiltersAsync" Variant="Variant.Text">Сбросить</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Elevation="1" Class="rounded-lg">
+    <MudTable Items="_items" Hover="true" Dense="true" Loading="_loading" Breakpoint="Breakpoint.Md">
+        <HeaderContent>
+            <MudTh>Заявка</MudTh>
+            <MudTh>Клиент</MudTh>
+            <MudTh>Категория</MudTh>
+            <MudTh>Статус</MudTh>
+            <MudTh>Приоритет</MudTh>
+            <MudTh>Исполнитель</MudTh>
+            <MudTh>SLA</MudTh>
+            <MudTh />
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Заявка">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Title</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Клиент">@context.ClientName</MudTd>
+            <MudTd DataLabel="Категория">@context.CategoryName</MudTd>
+            <MudTd DataLabel="Статус"><StatusChip Status="@context.StatusName" /></MudTd>
+            <MudTd DataLabel="Приоритет"><PriorityChip Priority="@context.Priority" /></MudTd>
+            <MudTd DataLabel="Исполнитель">@(context.ExecutorName ?? "—")</MudTd>
+            <MudTd DataLabel="SLA">
+                <div class="d-flex flex-column">
+                    <SlaChip SlaState="@context.SlaState" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        @(context.SlaDeadline?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")
+                    </MudText>
+                </div>
+            </MudTd>
+            <MudTd>
+                <div class="d-flex gap-1">
+                    <MudIconButton Href="@($"/requests/{context.Id}")"
+                                   Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   title="Открыть" />
+                    <MudButton OnClick="@(() => OpenAssignAsync(context))"
+                               Size="Size.Small"
+                               Variant="Variant.Text"
+                               Color="Color.Primary">
+                        Назначить
+                    </MudButton>
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="ma-4">
+                По выбранным фильтрам заявок нет.
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+<MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-3">
+    Показано @_items.Count из @_totalCount заявок.
+</MudText>
+
+@code {
+    private readonly RequestFilter _filter = new() { PageSize = 100 };
+    private IReadOnlyList<RequestListItemDto> _items = [];
+    private IReadOnlyList<CategoryDto> _categories = [];
+    private IReadOnlyList<RequestStatus> _statuses = [];
+    private IReadOnlyList<ApplicationUser> _executors = [];
+    private IReadOnlyList<AssignmentRuleDto> _rules = [];
+    private bool _loading = true;
+    private int _totalCount;
+    private Guid _userId;
+    private string _role = RoleNames.Dispatcher;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Guid.TryParse(state.User.FindFirstValue(ClaimTypes.NameIdentifier), out _userId);
+        _role = state.User.IsInRole(RoleNames.Admin) ? RoleNames.Admin : RoleNames.Dispatcher;
+
+        _categories = await AdminService.GetCategoriesAsync();
+        _statuses = await RequestService.GetStatusesAsync();
+        _executors = await RequestService.GetExecutorsAsync();
+        _rules = await AdminService.GetAssignmentRulesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await RequestService.GetRequestsAsync(_filter, _userId, _role);
+            _items = result.Items;
+            _totalCount = result.TotalCount;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _filter.Page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _filter.Search = null;
+        _filter.StatusId = null;
+        _filter.CategoryId = null;
+        _filter.Priority = null;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task OpenAssignAsync(RequestListItemDto request)
+    {
+        var suggested = _rules
+            .FirstOrDefault(x => x.CategoryId == request.CategoryId && x.IsActive)
+            ?.ExecutorId;
+
+        var parameters = new DialogParameters
+        {
+            [nameof(AssignDialog.RequestId)] = request.Id,
+            [nameof(AssignDialog.RequestTitle)] = request.Title,
+            [nameof(AssignDialog.Executors)] = _executors,
+            [nameof(AssignDialog.DefaultDeadline)] = request.SlaDeadline ?? DateTime.UtcNow.AddHours(24),
+            [nameof(AssignDialog.DispatcherId)] = _userId,
+            [nameof(AssignDialog.SuggestedExecutorId)] = suggested
+        };
+
+        var dialog = await DialogService.ShowAsync<AssignDialog>(
+            "Назначение исполнителя",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

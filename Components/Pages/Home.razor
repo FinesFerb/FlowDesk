@@ -1,0 +1,107 @@
+﻿@page "/"
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>FlowDesk — управление заявками</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <MudPaper Elevation="0" Class="pa-6 pa-md-10 rounded-xl hero-paper">
+        <MudGrid Spacing="6">
+            <MudItem xs="12" md="7">
+                <MudText Typo="Typo.overline" Color="Color.Primary">Сервис-деск для бизнеса</MudText>
+                <MudText Typo="Typo.h2" Class="mt-2" Style="font-weight: 800; line-height: 1.15;">
+                    FlowDesk — заявки, SLA и прозрачная работа команды
+                </MudText>
+                <MudText Typo="Typo.subtitle1" Class="mt-4" Style="max-width: 620px;">
+                    Единое окно для клиентов, диспетчеров и исполнителей: регистрация обращений,
+                    автоматический расчёт дедлайна, назначение ответственного, комментарии,
+                    вложения и отчёты для руководителя.
+                </MudText>
+                <div class="d-flex gap-3 mt-6 flex-wrap">
+                    <MudButton Href="Account/Register" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.PersonAdd">
+                        Создать аккаунт
+                    </MudButton>
+                    <MudButton Href="Account/Login" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Login">
+                        Войти в демо
+                    </MudButton>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="5">
+                <MudPaper Elevation="2" Class="pa-5 rounded-lg">
+                    <MudText Typo="Typo.h6" Class="mb-1">Демо-доступы</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                        Пароль для всех аккаунтов: <b>Passw0rd!</b>
+                    </MudText>
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr><th>Роль</th><th>Email</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Клиент</td><td>client@flowdesk.local</td></tr>
+                            <tr><td>Диспетчер</td><td>dispatcher@flowdesk.local</td></tr>
+                            <tr><td>Исполнитель</td><td>executor@flowdesk.local</td></tr>
+                            <tr><td>Руководитель</td><td>manager@flowdesk.local</td></tr>
+                            <tr><td>Администратор</td><td>admin@flowdesk.local</td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4" Dense="true">
+                        В демо-режиме письма не отправляются через SMTP, а сохраняются в
+                        <code>App_Data/emails</code>.
+                    </MudAlert>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+    </MudContainer>
+
+    <MudContainer MaxWidth="MaxWidth.Large" Class="my-8">
+        <MudGrid Spacing="4">
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 h-100 rounded-lg" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Primary" Size="Size.Large" />
+                    <MudText Typo="Typo.h6" Class="mt-2">SLA под контролем</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">
+                        Дедлайн рассчитывается по категории и приоритету. Просроченные и близкие к дедлайну заявки подсвечиваются.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 h-100 rounded-lg" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Color="Color.Secondary" Size="Size.Large" />
+                    <MudText Typo="Typo.h6" Class="mt-2">Роли и маршрутизация</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">
+                        Клиент, диспетчер, исполнитель, руководитель и администратор видят только свои сценарии и данные.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-5 h-100 rounded-lg" Elevation="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Insights" Color="Color.Tertiary" Size="Size.Large" />
+                    <MudText Typo="Typo.h6" Class="mt-2">Отчёты и экспорт</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">
+                        Сводка по статусам, категориям и приоритетам, среднее время выполнения и доля нарушений SLA. Экспорт CSV и PDF.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        var target = state.User.IsInRole(RoleNames.Admin) ? "/admin"
+            : state.User.IsInRole(RoleNames.Manager) ? "/reports"
+            : state.User.IsInRole(RoleNames.Dispatcher) ? "/dispatcher"
+            : state.User.IsInRole(RoleNames.Executor) ? "/executor"
+            : state.User.IsInRole(RoleNames.Client) ? "/client"
+            : "/Account/Manage";
+
+        NavigationManager.NavigateTo(target);
+    }
+}

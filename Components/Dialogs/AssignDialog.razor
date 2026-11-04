@@ -1,0 +1,125 @@
+@using FlowDesk.Web.Data
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Назначить исполнителя</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Заявка: <b>@RequestTitle</b>
+        </MudText>
+
+        <MudSelect T="Guid"
+                   @bind-Value="_executorId"
+                   Label="Исполнитель"
+                   Variant="Variant.Outlined"
+                   Class="mb-4">
+            @foreach (var executor in Executors)
+            {
+                <MudSelectItem T="Guid" Value="@executor.Id">@executor.FullName (@executor.Email)</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="7">
+                <MudDatePicker @bind-Date="_date" Label="Дата дедлайна" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="5">
+                <MudTimePicker @bind-Time="_time" Label="Время" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mt-2">
+            Дедлайн можно скорректировать вручную. По умолчанию подставлен расчёт по SLA-политике.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Отмена</MudButton>
+        <MudButton OnClick="SubmitAsync" Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving">
+            @(_saving ? "Сохраняем…" : "Назначить")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public Guid RequestId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string RequestTitle { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ApplicationUser> Executors { get; set; } = [];
+
+    [Parameter]
+    public DateTime DefaultDeadline { get; set; } = DateTime.UtcNow.AddHours(24);
+
+    [Parameter]
+    public Guid DispatcherId { get; set; }
+
+    [Parameter]
+    public Guid? SuggestedExecutorId { get; set; }
+
+    private Guid _executorId;
+    private DateTime? _date;
+    private TimeSpan? _time;
+    private bool _saving;
+
+    [Inject]
+    private IRequestService RequestService { get; set; } = default!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        if (Executors.Count > 0)
+        {
+            _executorId = SuggestedExecutorId is { } suggested && Executors.Any(x => x.Id == suggested)
+                ? suggested
+                : Executors[0].Id;
+        }
+
+        var local = DefaultDeadline.ToLocalTime();
+        _date = local.Date;
+        _time = local.TimeOfDay;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (_executorId == Guid.Empty)
+        {
+            Snackbar.Add("Выберите исполнителя.", Severity.Warning);
+            return;
+        }
+        if (_date is null || _time is null)
+        {
+            Snackbar.Add("Укажите дедлайн SLA.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var local = _date.Value.Date + _time.Value;
+            var utc = DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
+            await RequestService.AssignExecutorAsync(RequestId, _executorId, utc, DispatcherId);
+            Snackbar.Add("Исполнитель назначен, уведомление отправлено.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

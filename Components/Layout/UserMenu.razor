@@ -1,0 +1,25 @@
+<AuthorizeView>
+    <Authorized>
+        <MudMenu Label="@context.User.Identity?.Name"
+                 EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                 Color="Color.Inherit"
+                 Variant="Variant.Text">
+            <MudMenuItem Href="Account/Manage" Icon="@Icons.Material.Filled.Person">Профиль</MudMenuItem>
+            <MudMenuItem Href="Account/Manage/ChangePassword" Icon="@Icons.Material.Filled.Lock">Сменить пароль</MudMenuItem>
+        </MudMenu>
+        <form action="Account/Logout" method="post" class="d-inline">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="" />
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.Logout">
+                Выйти
+            </MudButton>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Href="Account/Login" Variant="Variant.Text" Color="Color.Inherit">Войти</MudButton>
+        <MudButton Href="Account/Register" Variant="Variant.Filled" Color="Color.Secondary" Class="ml-2">Регистрация</MudButton>
+    </NotAuthorized>
+</AuthorizeView>

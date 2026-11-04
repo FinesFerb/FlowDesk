@@ -1,0 +1,119 @@
+@page "/client"
+@attribute [Authorize(Roles = RoleNames.Client)]
+@inject IRequestService RequestService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using System.Security.Claims
+
+<PageTitle>Мои заявки — FlowDesk</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Мои заявки</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Здесь собраны обращения, которые вы отправили в сервис-деск.
+</MudText>
+
+<MudGrid Spacing="3" Class="mb-6">
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Всего</MudText>
+            <MudText Typo="Typo.h4">@_items.Count</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">В работе</MudText>
+            <MudText Typo="Typo.h4">@_items.Count(x => x.StatusName is "Назначена" or "В работе")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Выполнено</MudText>
+            <MudText Typo="Typo.h4">@_items.Count(x => x.StatusName == "Выполнено")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Просрочено</MudText>
+            <MudText Typo="Typo.h4" Color="Color.Error">@_items.Count(x => x.SlaState == SlaStates.Overdue)</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-3">
+    <MudText Typo="Typo.h6">История обращений</MudText>
+    <MudButton Href="/client/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+        Новая заявка
+    </MudButton>
+</div>
+
+<MudPaper Elevation="1" Class="rounded-lg">
+    <MudTable Items="_items" Hover="true" Dense="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Тема</MudTh>
+            <MudTh>Категория</MudTh>
+            <MudTh>Статус</MudTh>
+            <MudTh>Приоритет</MudTh>
+            <MudTh>SLA</MudTh>
+            <MudTh>Создана</MudTh>
+            <MudTh />
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Тема">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Title</MudText>
+            </MudTd>
+            <MudTd DataLabel="Категория">@context.CategoryName</MudTd>
+            <MudTd DataLabel="Статус"><StatusChip Status="@context.StatusName" /></MudTd>
+            <MudTd DataLabel="Приоритет"><PriorityChip Priority="@context.Priority" /></MudTd>
+            <MudTd DataLabel="SLA">
+                <div class="d-flex flex-column">
+                    <SlaChip SlaState="@context.SlaState" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        @(context.SlaDeadline?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")
+                    </MudText>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="Создана">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudTd>
+            <MudTd>
+                <MudButton Href="@($"/requests/{context.Id}")" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                    Открыть
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="ma-4">
+                У вас пока нет заявок. Создайте первую — это займёт меньше минуты.
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private IReadOnlyList<RequestListItemDto> _items = [];
+    private bool _loading = true;
+    private Guid _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (Guid.TryParse(state.User.FindFirstValue(ClaimTypes.NameIdentifier), out _userId))
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await RequestService.GetRequestsAsync(
+                new RequestFilter { PageSize = 100 },
+                _userId,
+                RoleNames.Client);
+            _items = result.Items;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

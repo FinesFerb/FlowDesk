@@ -1,0 +1,90 @@
+@using MudBlazor
+@inject IAdminService AdminService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(Category is null ? "Новая категория" : "Редактирование категории")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_model.Name"
+                      Label="Название"
+                      Variant="Variant.Outlined"
+                      MaxLength="120"
+                      Required="true"
+                      Class="mb-4" />
+        <MudTextField @bind-Value="_model.Description"
+                      Label="Описание"
+                      Variant="Variant.Outlined"
+                      Lines="2"
+                      MaxLength="500"
+                      Class="mb-4" />
+        <MudNumericField @bind-Value="_model.DefaultSlaHours"
+                         Label="SLA по умолчанию, ч"
+                         Variant="Variant.Outlined"
+                         Min="1"
+                         Max="720" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Отмена</MudButton>
+        <MudButton OnClick="SaveAsync" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+            Сохранить
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public CategoryDto? Category { get; set; }
+
+    private readonly SaveCategoryDto _model = new();
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Category is not null)
+        {
+            _model.Name = Category.Name;
+            _model.Description = Category.Description;
+            _model.DefaultSlaHours = Category.DefaultSlaHours;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            Snackbar.Add("Укажите название категории.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (Category is null)
+            {
+                await AdminService.CreateCategoryAsync(_model);
+            }
+            else
+            {
+                await AdminService.UpdateCategoryAsync(Category.Id, _model);
+            }
+
+            Snackbar.Add("Категория сохранена.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

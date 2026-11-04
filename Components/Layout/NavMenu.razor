@@ -1,0 +1,52 @@
+﻿<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Главная</MudNavLink>
+
+    <AuthorizeView Roles="@RoleNames.Client">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Клиент</MudText>
+            <MudNavLink Href="/client" Icon="@Icons.Material.Filled.ListAlt">Мои заявки</MudNavLink>
+            <MudNavLink Href="/client/new" Icon="@Icons.Material.Filled.AddCircle">Новая заявка</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{RoleNames.Dispatcher},{RoleNames.Admin}")">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Диспетчер</MudText>
+            <MudNavLink Href="/dispatcher" Icon="@Icons.Material.Filled.Assignment">Все заявки</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@RoleNames.Executor">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Исполнитель</MudText>
+            <MudNavLink Href="/executor" Icon="@Icons.Material.Filled.Build">Мои задачи</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{RoleNames.Manager},{RoleNames.Admin}")">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Руководитель</MudText>
+            <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.BarChart">Отчёты</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@RoleNames.Admin">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.overline" Class="px-4">Администратор</MudText>
+            <MudNavLink Href="/admin" Icon="@Icons.Material.Filled.Settings">Настройки</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView>
+        <NotAuthorized>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="Account/Login" Icon="@Icons.Material.Filled.Login">Войти</MudNavLink>
+            <MudNavLink Href="Account/Register" Icon="@Icons.Material.Filled.PersonAdd">Регистрация</MudNavLink>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudNavMenu>

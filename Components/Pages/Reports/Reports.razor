@@ -1,0 +1,160 @@
+@page "/reports"
+@attribute [Authorize(Roles = RoleNames.Manager + "," + RoleNames.Admin)]
+@inject IReportService ReportService
+@inject ISnackbar Snackbar
+
+<PageTitle>Отчёты — FlowDesk</PageTitle>
+
+<div class="d-flex justify-space-between align-center flex-wrap gap-3 mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1">Отчёты</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Сводка по заявкам, срокам и нарушениям SLA за выбранный период.
+        </MudText>
+    </div>
+</div>
+
+<MudPaper Elevation="1" Class="pa-4 rounded-lg mb-5">
+    <MudGrid Spacing="3" Class="align-center">
+        <MudItem xs="12" md="3">
+            <MudDatePicker @bind-Date="_from" Label="С даты" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker @bind-Date="_to" Label="По дату" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="6" Class="d-flex gap-2 flex-wrap">
+            <MudButton OnClick="LoadAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh">
+                Построить
+            </MudButton>
+            <MudButton Href="@CsvUrl" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TableView">
+                CSV
+            </MudButton>
+            <MudButton Href="@PdfUrl" Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.PictureAsPdf">
+                PDF
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-5" />
+}
+else if (_summary is null)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Выберите период и постройте отчёт.</MudAlert>
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-5">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Всего заявок</MudText>
+                <MudText Typo="Typo.h4">@_summary.TotalRequests</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Завершено</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Success">@_summary.CompletedRequests</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Среднее время</MudText>
+                <MudText Typo="Typo.h4">@_summary.AverageCompletionHours <span style="font-size: 0.55em;">ч</span></MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Нарушения SLA</MudText>
+                <MudText Typo="Typo.h4" Color="@(_summary.SlaBreachPercent > 0 ? Color.Error : Color.Success)">
+                    @_summary.SlaBreachPercent%
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg h-100">
+                <MudText Typo="Typo.h6" Class="mb-3">По статусам</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Статус</th><th>Кол-во</th><th>Доля</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _summary.ByStatus)
+                        {
+                            <tr><td>@row.Name</td><td>@row.Count</td><td>@row.SharePercent%</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg h-100">
+                <MudText Typo="Typo.h6" Class="mb-3">По категориям</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Категория</th><th>Кол-во</th><th>Доля</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _summary.ByCategory)
+                        {
+                            <tr><td>@row.Name</td><td>@row.Count</td><td>@row.SharePercent%</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg h-100">
+                <MudText Typo="Typo.h6" Class="mb-3">По приоритетам</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead><tr><th>Приоритет</th><th>Кол-во</th><th>Доля</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _summary.ByPriority)
+                        {
+                            <tr><td>@row.Name</td><td>@row.Count</td><td>@row.SharePercent%</td></tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_summary.TotalRequests == 0)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+            За выбранный период заявок нет.
+        </MudAlert>
+    }
+}
+
+@code {
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _to = DateTime.Today;
+    private ReportSummaryDto? _summary;
+    private bool _loading = true;
+
+    private string CsvUrl => $"/api/reports/csv?from={(_from ?? DateTime.Today):yyyy-MM-dd}&to={(_to ?? DateTime.Today):yyyy-MM-dd}";
+    private string PdfUrl => $"/api/reports/pdf?from={(_from ?? DateTime.Today):yyyy-MM-dd}&to={(_to ?? DateTime.Today):yyyy-MM-dd}";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _summary = await ReportService.GetSummaryAsync(
+                (_from ?? DateTime.Today).Date,
+                (_to ?? DateTime.Today).Date.AddDays(1).AddTicks(-1));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

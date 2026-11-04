@@ -1,0 +1,18 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@Color">
+    @Status
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Status { get; set; } = string.Empty;
+
+    private Color Color => Status switch
+    {
+        "Новая" => Color.Info,
+        "Назначена" => Color.Primary,
+        "В работе" => Color.Warning,
+        "Выполнено" => Color.Success,
+        "Отклонено" => Color.Error,
+        _ => Color.Default
+    };
+}

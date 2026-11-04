@@ -1,0 +1,409 @@
+@page "/requests/{Id:guid}"
+@attribute [Authorize]
+@using System.Security.Claims
+@using FlowDesk.Web.Components.Dialogs
+@using FlowDesk.Web.Data
+@inject IRequestService RequestService
+@inject IAdminService AdminService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(_request?.Title ?? "Заявка") — FlowDesk</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_request is null)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="my-6">
+        Заявка не найдена или у вас нет к ней доступа.
+    </MudAlert>
+    <MudButton Href="/" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">На главную</MudButton>
+}
+else
+{
+    <MudButton Href="@BackUrl" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">
+        Назад
+    </MudButton>
+
+    <MudPaper Elevation="1" Class="pa-5 pa-md-6 rounded-lg mb-5">
+        <div class="d-flex justify-space-between align-start flex-wrap gap-4">
+            <div style="max-width: 760px;">
+                <div class="d-flex align-center gap-2 flex-wrap mb-2">
+                    <StatusChip Status="@_request.StatusName" />
+                    <PriorityChip Priority="@_request.Priority" />
+                    <SlaChip SlaState="@_request.SlaState" />
+                </div>
+                <MudText Typo="Typo.h4">@_request.Title</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                    @_request.CategoryName · создана @_request.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                </MudText>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                @if (CanAssign)
+                {
+                    <MudButton OnClick="OpenAssignAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd">
+                        Назначить
+                    </MudButton>
+                }
+                @if (CanChangeStatus && _request.StatusName == "Назначена")
+                {
+                    <MudButton OnClick="@(() => ChangeStatusAsync("В работе"))" Variant="Variant.Filled" Color="Color.Primary">
+                        В работу
+                    </MudButton>
+                }
+                @if (CanChangeStatus && _request.StatusName == "В работе")
+                {
+                    <MudButton OnClick="@(() => ChangeStatusAsync("Выполнено"))" Variant="Variant.Filled" Color="Color.Success">
+                        Выполнено
+                    </MudButton>
+                    <MudButton OnClick="@(() => ChangeStatusAsync("Отклонено"))" Variant="Variant.Text" Color="Color.Error">
+                        Отклонить
+                    </MudButton>
+                }
+            </div>
+        </div>
+
+        <MudDivider Class="my-5" />
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Описание</MudText>
+        <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@_request.Description</MudText>
+    </MudPaper>
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" lg="8">
+            <MudPaper Elevation="1" Class="rounded-lg pa-0">
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4">
+                    <MudTabPanel Text="@($"Комментарии ({_request.Comments.Count})")">
+                        @if (_request.Comments.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4">
+                                Комментариев пока нет. Уточните детали или оставьте заметку для команды.
+                            </MudAlert>
+                        }
+                        @foreach (var comment in _request.Comments)
+                        {
+                            <div class="d-flex gap-3 mb-4">
+                                <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                    @comment.AuthorName.Substring(0, 1)
+                                </MudAvatar>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-center gap-2 flex-wrap">
+                                        <MudText Typo="Typo.subtitle2">@comment.AuthorName</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@comment.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                                    </div>
+                                    <MudText Typo="Typo.body2" Class="mt-1" Style="white-space: pre-wrap;">@comment.Text</MudText>
+                                </div>
+                            </div>
+                        }
+
+                        <MudDivider Class="my-4" />
+                        <MudTextField @bind-Value="_commentText"
+                                      Label="Новый комментарий"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="4000"
+                                      Counter="4000"
+                                      Placeholder="Уточните детали, сообщите о ходе работ…" />
+                        <div class="d-flex justify-end mt-3">
+                            <MudButton OnClick="AddCommentAsync"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Disabled="@(string.IsNullOrWhiteSpace(_commentText) || _busy)"
+                                       StartIcon="@Icons.Material.Filled.Send">
+                                Отправить
+                            </MudButton>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="@($"Вложения ({_request.Attachments.Count})")">
+                        @if (_request.Attachments.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4">
+                                Вложений нет. Можно приложить фото, PDF, документ или архив до 10 МБ.
+                            </MudAlert>
+                        }
+                        @foreach (var attachment in _request.Attachments)
+                        {
+                            <MudPaper Outlined="true" Class="pa-3 mb-2 rounded-lg">
+                                <div class="d-flex justify-space-between align-center gap-3 flex-wrap">
+                                    <div class="d-flex align-center gap-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.AttachFile" Color="Color.Secondary" />
+                                        <div>
+                                            <MudText Typo="Typo.body2">@attachment.FileName</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @FormatSize(attachment.FileSize) · @attachment.UploadedByName · @attachment.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                    <MudButton Href="@($"/api/attachments/{attachment.Id}")"
+                                               Size="Size.Small"
+                                               Variant="Variant.Text"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Download">
+                                        Скачать
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+
+                        <MudDivider Class="my-4" />
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Добавить вложение</MudText>
+                        <InputFile OnChange="UploadFileAsync" class="form-control" />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                            Изображения, PDF, DOC/DOCX, XLS/XLSX, TXT/CSV, ZIP. Максимум 10 МБ.
+                        </MudText>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="@($"История ({_request.History.Count})")">
+                        @foreach (var log in _request.History)
+                        {
+                            <div class="d-flex gap-3 mb-3">
+                                <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Secondary" Size="Size.Small" />
+                                <div>
+                                    <MudText Typo="Typo.body2">@log.Action</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(log.OldValue) || !string.IsNullOrWhiteSpace(log.NewValue))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @log.OldValue @(string.IsNullOrWhiteSpace(log.OldValue) ? "" : "→") @log.NewValue
+                                        </MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @(log.UserName ?? "Система") · @log.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                    </MudText>
+                                </div>
+                            </div>
+                        }
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Карточка заявки</MudText>
+                <div class="d-flex justify-space-between py-2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Клиент</MudText>
+                    <MudText Typo="Typo.body2">@_request.ClientName</MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-space-between py-2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Исполнитель</MudText>
+                    <MudText Typo="Typo.body2">@(_request.ExecutorName ?? "Не назначен")</MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-space-between py-2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Диспетчер</MudText>
+                    <MudText Typo="Typo.body2">@(_request.DispatcherName ?? "—")</MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-space-between py-2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">SLA</MudText>
+                    <MudText Typo="Typo.body2">
+                        @(_request.SlaDeadline?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")
+                    </MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-space-between py-2">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Обновлена</MudText>
+                    <MudText Typo="Typo.body2">@_request.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                </div>
+                @if (_request.ClosedAt is not null)
+                {
+                    <MudDivider />
+                    <div class="d-flex justify-space-between py-2">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Закрыта</MudText>
+                        <MudText Typo="Typo.body2">@_request.ClosedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                    </div>
+                }
+            </MudPaper>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                Уведомления о смене статуса и новых комментариях отправляются участникам заявки.
+                В демо-режиме письма сохраняются в <code>App_Data/emails</code>.
+            </MudAlert>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private RequestDto? _request;
+    private IReadOnlyList<ApplicationUser> _executors = [];
+    private IReadOnlyList<AssignmentRuleDto> _rules = [];
+    private IReadOnlyList<RequestStatus> _statuses = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string _commentText = string.Empty;
+    private Guid _userId;
+    private string _role = string.Empty;
+
+    private bool IsStaff => _role is RoleNames.Dispatcher or RoleNames.Admin;
+    private bool CanAssign => IsStaff && _request?.ClosedAt is null;
+    private bool CanChangeStatus => _role == RoleNames.Executor && _request?.ClosedAt is null;
+    private string BackUrl => _role switch
+    {
+        RoleNames.Client => "/client",
+        RoleNames.Executor => "/executor",
+        RoleNames.Dispatcher or RoleNames.Admin => "/dispatcher",
+        RoleNames.Manager => "/reports",
+        _ => "/"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Guid.TryParse(state.User.FindFirstValue(ClaimTypes.NameIdentifier), out _userId);
+        _role = GetEffectiveRole(state.User);
+
+        _statuses = await RequestService.GetStatusesAsync();
+        if (IsStaff)
+        {
+            _executors = await RequestService.GetExecutorsAsync();
+            _rules = await AdminService.GetAssignmentRulesAsync();
+        }
+
+        _request = await RequestService.GetByIdAsync(Id, _userId, _role);
+        _loading = false;
+    }
+
+    private async Task AddCommentAsync()
+    {
+        if (_request is null || string.IsNullOrWhiteSpace(_commentText))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await RequestService.AddCommentAsync(_request.Id, _userId, _commentText);
+            _commentText = string.Empty;
+            Snackbar.Add("Комментарий добавлен.", Severity.Success);
+            _request = await RequestService.GetByIdAsync(Id, _userId, _role);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UploadFileAsync(InputFileChangeEventArgs e)
+    {
+        if (_request is null)
+        {
+            return;
+        }
+
+        var file = e.File;
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            Snackbar.Add("Файл больше 10 МБ.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            await RequestService.AddAttachmentAsync(_request.Id, _userId, stream, file.Name, file.ContentType);
+            Snackbar.Add("Вложение добавлено.", Severity.Success);
+            _request = await RequestService.GetByIdAsync(Id, _userId, _role);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ChangeStatusAsync(string statusName)
+    {
+        if (_request is null)
+        {
+            return;
+        }
+
+        var status = _statuses.FirstOrDefault(x => x.Name == statusName);
+        if (status is null)
+        {
+            Snackbar.Add($"Статус «{statusName}» не найден.", Severity.Error);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await RequestService.UpdateStatusAsync(_request.Id, status.Id, _userId);
+            Snackbar.Add($"Статус изменён на «{statusName}».", Severity.Success);
+            _request = await RequestService.GetByIdAsync(Id, _userId, _role);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenAssignAsync()
+    {
+        if (_request is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters
+        {
+            [nameof(AssignDialog.RequestId)] = _request.Id,
+            [nameof(AssignDialog.RequestTitle)] = _request.Title,
+            [nameof(AssignDialog.Executors)] = _executors,
+            [nameof(AssignDialog.DefaultDeadline)] = _request.SlaDeadline ?? DateTime.UtcNow.AddHours(24),
+            [nameof(AssignDialog.DispatcherId)] = _userId,
+            [nameof(AssignDialog.SuggestedExecutorId)] = _rules
+                .FirstOrDefault(x => x.CategoryId == _request.CategoryId && x.IsActive)
+                ?.ExecutorId
+        };
+
+        var dialog = await DialogService.ShowAsync<AssignDialog>(
+            "Назначение исполнителя",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            _request = await RequestService.GetByIdAsync(Id, _userId, _role);
+        }
+    }
+
+    private static string GetEffectiveRole(ClaimsPrincipal principal)
+    {
+        if (principal.IsInRole(RoleNames.Admin)) return RoleNames.Admin;
+        if (principal.IsInRole(RoleNames.Manager)) return RoleNames.Manager;
+        if (principal.IsInRole(RoleNames.Dispatcher)) return RoleNames.Dispatcher;
+        if (principal.IsInRole(RoleNames.Executor)) return RoleNames.Executor;
+        if (principal.IsInRole(RoleNames.Client)) return RoleNames.Client;
+        return string.Empty;
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} Б",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.0} КБ",
+        _ => $"{bytes / (1024.0 * 1024.0):0.0} МБ"
+    };
+}

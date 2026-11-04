@@ -1,0 +1,134 @@
+@page "/client/new"
+@attribute [Authorize(Roles = RoleNames.Client)]
+@inject IRequestService RequestService
+@inject IAdminService AdminService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@using System.Security.Claims
+
+<PageTitle>Новая заявка — FlowDesk</PageTitle>
+
+<MudButton Href="/client" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">
+    Назад к заявкам
+</MudButton>
+
+<MudText Typo="Typo.h4" Class="mb-1">Новая заявка</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Опишите проблему — диспетчер получит уведомление и назначит исполнителя. Дедлайн SLA рассчитается автоматически.
+</MudText>
+
+<MudPaper Elevation="1" Class="pa-5 pa-md-6 rounded-lg" Style="max-width: 860px;">
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+        <DataAnnotationsValidator />
+        <MudGrid Spacing="4">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Title"
+                              For="@(() => _model.Title)"
+                              Label="Тема заявки"
+                              Placeholder="Например: не включается принтер в бухгалтерии"
+                              Variant="Variant.Outlined"
+                              MaxLength="200"
+                              Counter="200" />
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="int"
+                           @bind-Value="_model.CategoryId"
+                           For="@(() => _model.CategoryId)"
+                           Label="Категория"
+                           Variant="Variant.Outlined"
+                           AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var category in _categories)
+                    {
+                        <MudSelectItem T="int" Value="@category.Id">@category.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudSelect T="RequestPriority"
+                           @bind-Value="_model.Priority"
+                           Label="Приоритет"
+                           Variant="Variant.Outlined"
+                           AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var priority in Enum.GetValues<RequestPriority>())
+                    {
+                        <MudSelectItem T="RequestPriority" Value="@priority">@priority.ToRussian()</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Описание проблемы"
+                              Placeholder="Что случилось, где находится оборудование, что уже проверили"
+                              Variant="Variant.Outlined"
+                              Lines="6"
+                              MaxLength="4000"
+                              Counter="4000" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                    После создания заявка получит статус «Новая». Диспетчер увидит её в очереди и назначит исполнителя.
+                    Срок решения зависит от категории и приоритета.
+                </MudAlert>
+            </MudItem>
+
+            <MudItem xs="12" Class="d-flex gap-3">
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="_saving"
+                           StartIcon="@Icons.Material.Filled.Send">
+                    @(_saving ? "Отправляем…" : "Отправить заявку")
+                </MudButton>
+                <MudButton Href="/client" Variant="Variant.Text" Color="Color.Default">Отмена</MudButton>
+            </MudItem>
+        </MudGrid>
+    </EditForm>
+</MudPaper>
+
+@code {
+    private readonly CreateRequestDto _model = new() { Priority = RequestPriority.Normal };
+    private IReadOnlyList<CategoryDto> _categories = [];
+    private bool _saving;
+    private Guid _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Guid.TryParse(state.User.FindFirstValue(ClaimTypes.NameIdentifier), out _userId);
+        _categories = await AdminService.GetCategoriesAsync();
+        if (_categories.Count > 0)
+        {
+            _model.CategoryId = _categories[0].Id;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var created = await RequestService.CreateRequestAsync(_model, _userId);
+            Snackbar.Add("Заявка создана. Диспетчер получил уведомление.", Severity.Success);
+            NavigationManager.NavigateTo($"/requests/{created.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,143 @@
+@page "/executor"
+@attribute [Authorize(Roles = RoleNames.Executor)]
+@using System.Security.Claims
+@using FlowDesk.Web.Domain.Entities
+@inject IRequestService RequestService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<PageTitle>Мои задачи — FlowDesk</PageTitle>
+
+<div class="d-flex justify-space-between align-center flex-wrap gap-3 mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1">Мои задачи</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Заявки, назначенные на вас. Следите за SLA и фиксируйте результат.
+        </MudText>
+    </div>
+    <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh">
+        Обновить
+    </MudButton>
+</div>
+
+<MudPaper Elevation="1" Class="rounded-lg">
+    <MudTable Items="_items" Hover="true" Dense="true" Loading="_loading" Breakpoint="Breakpoint.Md">
+        <HeaderContent>
+            <MudTh>Заявка</MudTh>
+            <MudTh>Клиент</MudTh>
+            <MudTh>Категория</MudTh>
+            <MudTh>Статус</MudTh>
+            <MudTh>Приоритет</MudTh>
+            <MudTh>SLA</MudTh>
+            <MudTh>Действия</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Заявка">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Title</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Клиент">@context.ClientName</MudTd>
+            <MudTd DataLabel="Категория">@context.CategoryName</MudTd>
+            <MudTd DataLabel="Статус"><StatusChip Status="@context.StatusName" /></MudTd>
+            <MudTd DataLabel="Приоритет"><PriorityChip Priority="@context.Priority" /></MudTd>
+            <MudTd DataLabel="SLA">
+                <div class="d-flex flex-column">
+                    <SlaChip SlaState="@context.SlaState" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        @(context.SlaDeadline?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")
+                    </MudText>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="Действия">
+                <div class="d-flex gap-1 flex-wrap">
+                    <MudIconButton Href="@($"/requests/{context.Id}")"
+                                   Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small"
+                                   title="Открыть" />
+                    @if (context.StatusName == "Назначена")
+                    {
+                        <MudButton OnClick="@(() => ChangeStatusAsync(context, "В работе"))"
+                                   Size="Size.Small"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary">
+                            В работу
+                        </MudButton>
+                    }
+                    @if (context.StatusName == "В работе")
+                    {
+                        <MudButton OnClick="@(() => ChangeStatusAsync(context, "Выполнено"))"
+                                   Size="Size.Small"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Success">
+                            Выполнено
+                        </MudButton>
+                        <MudButton OnClick="@(() => ChangeStatusAsync(context, "Отклонено"))"
+                                   Size="Size.Small"
+                                   Variant="Variant.Text"
+                                   Color="Color.Error">
+                            Отклонить
+                        </MudButton>
+                    }
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="ma-4">
+                Назначенных заявок нет. Диспетчер назначит вас, когда появится задача.
+            </MudAlert>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private IReadOnlyList<RequestListItemDto> _items = [];
+    private IReadOnlyList<RequestStatus> _statuses = [];
+    private bool _loading = true;
+    private Guid _userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Guid.TryParse(state.User.FindFirstValue(ClaimTypes.NameIdentifier), out _userId);
+        _statuses = await RequestService.GetStatusesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await RequestService.GetRequestsAsync(
+                new RequestFilter { PageSize = 100 },
+                _userId,
+                RoleNames.Executor);
+            _items = result.Items;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ChangeStatusAsync(RequestListItemDto request, string statusName)
+    {
+        var status = _statuses.FirstOrDefault(x => x.Name == statusName);
+        if (status is null)
+        {
+            Snackbar.Add($"Статус «{statusName}» не найден.", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await RequestService.UpdateStatusAsync(request.Id, status.Id, _userId);
+            Snackbar.Add($"Статус изменён на «{statusName}».", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

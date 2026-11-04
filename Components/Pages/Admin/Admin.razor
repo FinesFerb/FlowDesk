@@ -1,0 +1,308 @@
+@page "/admin"
+@attribute [Authorize(Roles = RoleNames.Admin)]
+@using FlowDesk.Web.Components.Dialogs
+@using FlowDesk.Web.Data
+@inject IAdminService AdminService
+@inject IRequestService RequestService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Администрирование — FlowDesk</PageTitle>
+
+<div class="d-flex justify-space-between align-center flex-wrap gap-3 mb-6">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1">Администрирование</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Категории, SLA-политики, правила маршрутизации и пользователи.
+        </MudText>
+    </div>
+    <MudButton OnClick="LoadAsync" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh">Обновить</MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+<MudPaper Elevation="1" Class="rounded-lg pa-0">
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+        <MudTabPanel Text="Категории">
+            <div class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Категории заявок</MudText>
+                    <MudButton OnClick="@(() => OpenCategoryDialogAsync(null))" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+                        Добавить
+                    </MudButton>
+                </div>
+                <MudTable Items="_categories" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Название</MudTh>
+                        <MudTh>Описание</MudTh>
+                        <MudTh>SLA по умолчанию</MudTh>
+                        <MudTh />
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>@(context.Description ?? "—")</MudTd>
+                        <MudTd>@context.DefaultSlaHours ч</MudTd>
+                        <MudTd>
+                            <MudButton OnClick="@(() => OpenCategoryDialogAsync(context))" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                                Изменить
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="SLA-политики">
+            <div class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">SLA-политики</MudText>
+                    <MudButton OnClick="@(() => OpenSlaDialogAsync(null))" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+                        Добавить
+                    </MudButton>
+                </div>
+                <MudTable Items="_policies" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Категория</MudTh>
+                        <MudTh>Приоритет</MudTh>
+                        <MudTh>Срок</MudTh>
+                        <MudTh />
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.CategoryName</MudTd>
+                        <MudTd><PriorityChip Priority="@context.Priority" /></MudTd>
+                        <MudTd>@context.Hours ч</MudTd>
+                        <MudTd>
+                            <MudButton OnClick="@(() => OpenSlaDialogAsync(context))" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                                Изменить
+                            </MudButton>
+                            <MudButton OnClick="@(() => DeleteSlaAsync(context))" Size="Size.Small" Variant="Variant.Text" Color="Color.Error">
+                                Удалить
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Маршрутизация">
+            <div class="pa-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Правила маршрутизации</MudText>
+                    <MudButton OnClick="OpenRuleDialogAsync" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+                        Добавить
+                    </MudButton>
+                </div>
+                <MudTable Items="_rules" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Категория</MudTh>
+                        <MudTh>Исполнитель</MudTh>
+                        <MudTh>Порядок</MudTh>
+                        <MudTh>Активно</MudTh>
+                        <MudTh />
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.CategoryName</MudTd>
+                        <MudTd>@context.ExecutorName</MudTd>
+                        <MudTd>@context.SortOrder</MudTd>
+                        <MudTd>@(context.IsActive ? "Да" : "Нет")</MudTd>
+                        <MudTd>
+                            <MudButton OnClick="@(() => DeleteRuleAsync(context))" Size="Size.Small" Variant="Variant.Text" Color="Color.Error">
+                                Удалить
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Пользователи">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Пользователи и роли</MudText>
+                <MudTable Items="_users" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Имя</MudTh>
+                        <MudTh>Email</MudTh>
+                        <MudTh>Роли</MudTh>
+                        <MudTh>Статус</MudTh>
+                        <MudTh />
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.FullName</MudTd>
+                        <MudTd>@context.Email</MudTd>
+                        <MudTd>@string.Join(", ", context.Roles)</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)" Variant="Variant.Outlined">
+                                @(context.IsActive ? "Активен" : "Заблокирован")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudButton OnClick="@(() => ToggleUserAsync(context))"
+                                       Size="Size.Small"
+                                       Variant="Variant.Text"
+                                       Color="@(context.IsActive ? Color.Error : Color.Success)">
+                                @(context.IsActive ? "Деактивировать" : "Активировать")
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+</MudPaper>
+
+@code {
+    private IReadOnlyList<CategoryDto> _categories = [];
+    private IReadOnlyList<SlaPolicyDto> _policies = [];
+    private IReadOnlyList<AssignmentRuleDto> _rules = [];
+    private IReadOnlyList<UserDto> _users = [];
+    private IReadOnlyList<ApplicationUser> _executors = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _categories = await AdminService.GetCategoriesAsync();
+            _policies = await AdminService.GetSlaPoliciesAsync();
+            _rules = await AdminService.GetAssignmentRulesAsync();
+            _users = await AdminService.GetUsersAsync();
+            _executors = await RequestService.GetExecutorsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCategoryDialogAsync(CategoryDto? category)
+    {
+        var parameters = new DialogParameters();
+        if (category is not null)
+        {
+            parameters[nameof(CategoryDialog.Category)] = category;
+        }
+
+        var dialog = await DialogService.ShowAsync<CategoryDialog>(
+            category is null ? "Новая категория" : "Категория",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenSlaDialogAsync(SlaPolicyDto? policy)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(SlaPolicyDialog.Categories)] = _categories
+        };
+        if (policy is not null)
+        {
+            parameters[nameof(SlaPolicyDialog.Policy)] = policy;
+        }
+
+        var dialog = await DialogService.ShowAsync<SlaPolicyDialog>(
+            policy is null ? "Новая SLA-политика" : "SLA-политика",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task OpenRuleDialogAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(AssignmentRuleDialog.Categories)] = _categories,
+            [nameof(AssignmentRuleDialog.Executors)] = _executors
+        };
+
+        var dialog = await DialogService.ShowAsync<AssignmentRuleDialog>(
+            "Новое правило",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteSlaAsync(SlaPolicyDto policy)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Удаление SLA-политики",
+            $"Удалить политику для «{policy.CategoryName}» / {policy.Priority.ToRussian()}?",
+            yesText: "Удалить",
+            cancelText: "Отмена");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await AdminService.DeleteSlaPolicyAsync(policy.Id);
+            Snackbar.Add("SLA-политика удалена.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteRuleAsync(AssignmentRuleDto rule)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Удаление правила",
+            $"Удалить правило для «{rule.CategoryName}»?",
+            yesText: "Удалить",
+            cancelText: "Отмена");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await AdminService.DeleteAssignmentRuleAsync(rule.Id);
+            Snackbar.Add("Правило удалено.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ToggleUserAsync(UserDto user)
+    {
+        try
+        {
+            await AdminService.SetUserActiveAsync(user.Id, !user.IsActive);
+            Snackbar.Add(user.IsActive ? "Пользователь деактивирован." : "Пользователь активирован.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
