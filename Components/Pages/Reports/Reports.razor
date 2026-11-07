@@ -144,9 +144,12 @@ else
         _loading = true;
         try
         {
-            _summary = await ReportService.GetSummaryAsync(
-                (_from ?? DateTime.Today).Date,
-                (_to ?? DateTime.Today).Date.AddDays(1).AddTicks(-1));
+            var from = (_from ?? DateTime.Today).Date;
+            var to = (_to ?? DateTime.Today).Date;
+            var startUtc = DateTime.SpecifyKind(from, DateTimeKind.Local).ToUniversalTime();
+            var endUtc = DateTime.SpecifyKind(to.AddDays(1), DateTimeKind.Local).ToUniversalTime().AddTicks(-1);
+
+            _summary = await ReportService.GetSummaryAsync(startUtc, endUtc);
         }
         catch (Exception ex)
         {

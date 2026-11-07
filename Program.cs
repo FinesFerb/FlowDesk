@@ -138,8 +138,10 @@ static (DateTime From, DateTime To) NormalizePeriod(DateTime? from, DateTime? to
 {
     var now = DateTime.UtcNow;
     var start = (from ?? new DateTime(now.Year, now.Month, 1)).Date;
-    var end = (to ?? now).Date.AddDays(1).AddTicks(-1);
-    return start <= end ? (start, end) : (end.Date, start.Date.AddDays(1).AddTicks(-1));
+    var end = (to ?? now).Date;
+    var startUtc = DateTime.SpecifyKind(start, DateTimeKind.Local).ToUniversalTime();
+    var endUtc = DateTime.SpecifyKind(end.AddDays(1), DateTimeKind.Local).ToUniversalTime().AddTicks(-1);
+    return startUtc <= endUtc ? (startUtc, endUtc) : (endUtc, startUtc);
 }
 
 static bool TryGetUserId(ClaimsPrincipal principal, out Guid userId)

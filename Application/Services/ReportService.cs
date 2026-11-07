@@ -41,7 +41,7 @@ public class ReportService(FlowDeskDbContext db) : IReportService
         var summary = await GetSummaryAsync(from, to, ct);
         var sb = new StringBuilder();
         sb.AppendLine("FlowDesk — отчёт по заявкам");
-        sb.AppendLine($"Период;{summary.From:dd.MM.yyyy};{summary.To:dd.MM.yyyy}");
+        sb.AppendLine($"Период;{summary.From.ToLocalTime():dd.MM.yyyy};{summary.To.ToLocalTime():dd.MM.yyyy}");
         sb.AppendLine();
         sb.AppendLine("Показатель;Значение");
         sb.AppendLine($"Всего заявок;{summary.TotalRequests}");
@@ -67,12 +67,12 @@ public class ReportService(FlowDeskDbContext db) : IReportService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(28);
-                page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(10));
+                page.DefaultTextStyle(x => x.FontFamily("Lato").FontSize(10));
 
                 page.Header().Column(column =>
                 {
                     column.Item().Text("FlowDesk — отчёт по заявкам").FontSize(18).SemiBold();
-                    column.Item().Text($"Период: {summary.From:dd.MM.yyyy} — {summary.To:dd.MM.yyyy}").FontColor(Colors.Grey.Darken1);
+                    column.Item().Text($"Период: {summary.From.ToLocalTime():dd.MM.yyyy} — {summary.To.ToLocalTime():dd.MM.yyyy}").FontColor(Colors.Grey.Darken1);
                     column.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                 });
 
