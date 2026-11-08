@@ -76,7 +76,11 @@ else
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    // В тестах переопределение статус-страницы мешает проверять точные коды ответов API.
+    app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+}
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 
@@ -156,3 +160,5 @@ static string GetEffectiveRole(ClaimsPrincipal principal)
     if (principal.IsInRole(RoleNames.Client)) return RoleNames.Client;
     return string.Empty;
 }
+
+public partial class Program { }

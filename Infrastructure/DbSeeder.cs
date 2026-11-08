@@ -17,7 +17,16 @@ public static class DbSeeder
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        await db.Database.MigrateAsync();
+        // Для тестовых провайдеров (SQLite in-memory) миграции Npgsql не применимы —
+        // создаём схему напрямую из модели.
+        if (db.Database.ProviderName is "Microsoft.EntityFrameworkCore.Sqlite" or "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            await db.Database.EnsureCreatedAsync();
+        }
+        else
+        {
+            await db.Database.MigrateAsync();
+        }
 
         foreach (var role in RoleNames.All)
         {
