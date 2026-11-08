@@ -95,7 +95,7 @@ dotnet run --project FlowDesk.Web.csproj --urls http://127.0.0.1:5091
 Проект `tests/FlowDesk.Tests` (xUnit) проверяет бизнес-логику и веб-слой изолированно от PostgreSQL:
 
 ```powershell
-dotnet test
+dotnet test FlowDesk.slnx
 ```
 
 - **Модульные тесты (21)** — сервисы `SlaService`, `RequestService`, `ReportService`, `AdminService`, `NotificationService` на SQLite in-memory: расчёт дедлайнов и SLA-статусов, создание/назначение/смена статусов заявок, права доступа к заявкам и вложениям, аудит, уведомления и письма (SMTP заменён записывающей заглушкой), подсчёт метрик отчёта и CSV-экспорт, валидация административных справочников.
